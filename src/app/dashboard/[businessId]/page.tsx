@@ -23,6 +23,7 @@ export default function BusinessDashboardPage({ params }: { params: Promise<{ bu
         transactions={transactions}
         businessName={biz?.name}
         businessId={businessId}
+        business={biz}
       />
     </AppShell>
   );

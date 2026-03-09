@@ -9,7 +9,18 @@ import { ParsedColumn, Transaction } from "@/types";
 import AppShell from "@/components/AppShell";
 import { formatCurrency } from "@/lib/utils";
 import { getTransactions, clearBusinessTransactions } from "@/lib/store";
-import { Upload, CheckCircle, FileText, X, Trash2, AlertTriangle, TrendingUp, TrendingDown, Calendar } from "lucide-react";
+import { Upload, CheckCircle, FileText, X, Trash2, AlertTriangle, TrendingUp, TrendingDown, Calendar, ChevronDown, Sparkles } from "lucide-react";
+
+const CATEGORY_OPTIONS_EN = [
+  "Salaries", "Rent", "Marketing", "Software", "Utilities",
+  "Banking & Fees", "Insurance", "Inventory", "Professional Services",
+  "Travel", "Food", "Office", "Other"
+];
+const CATEGORY_OPTIONS_HE = [
+  "שכר", "שכירות", "שיווק", "תוכנה", "חשמל ומים",
+  "בנק ועמלות", "ביטוח", "מלאי", "שירותים מקצועיים",
+  "נסיעות", "אוכל", "משרד", "אחר"
+];
 
 export default function UploadPage({ params }: { params: Promise<{ businessId: string }> }) {
   const { businessId } = use(params);
@@ -20,10 +31,12 @@ export default function UploadPage({ params }: { params: Promise<{ businessId: s
   const [dragging, setDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [parsing, setParsing] = useState(false);
+  const [categorizing, setCategorizing] = useState(false);
   const [columns, setColumns] = useState<ParsedColumn | null>(null);
   const [newTransactions, setNewTransactions] = useState<Transaction[]>([]);
   const [success, setSuccess] = useState(false);
   const [showDeleteWarning, setShowDeleteWarning] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   useEffect(() => {
     setSelectedBusinessId(businessId);
@@ -38,20 +51,44 @@ export default function UploadPage({ params }: { params: Promise<{ businessId: s
   const firstDate = dates[0];
   const lastDate = dates[dates.length - 1];
 
+  const categorizeTxs = useCallback(async (txs: Transaction[]): Promise<Transaction[]> => {
+    const uniqueDescs = [...new Set(txs.filter((t) => t.amount < 0).map((t) => t.description))].slice(0, 60);
+    if (uniqueDescs.length === 0) return txs;
+    try {
+      setCategorizing(true);
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categorizeMode: true, descriptions: uniqueDescs, lang }),
+      });
+      const data = await res.json();
+      const map: Record<string, string> = data.categories || {};
+      return txs.map((t) => ({
+        ...t,
+        category: t.amount < 0 ? (map[t.description] ?? (lang === "he" ? "אחר" : "Other")) : t.category,
+      }));
+    } catch {
+      return txs;
+    } finally {
+      setCategorizing(false);
+    }
+  }, [lang]);
+
   const handleFile = useCallback(async (f: File) => {
     setFile(f);
     setParsing(true);
     try {
       const { columns, transactions } = await parseFile(f, businessId);
       setColumns(columns);
-      setNewTransactions(transactions);
+      setParsing(false);
+      const categorized = await categorizeTxs(transactions);
+      setNewTransactions(categorized);
     } catch (err) {
       alert(lang === "he" ? "שגיאה בקריאת הקובץ" : "Error reading file");
       console.error(err);
-    } finally {
       setParsing(false);
     }
-  }, [businessId, lang]);
+  }, [businessId, lang, categorizeTxs]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -63,7 +100,7 @@ export default function UploadPage({ params }: { params: Promise<{ businessId: s
   const handleImport = () => {
     importTransactions(newTransactions);
     setSuccess(true);
-    setTimeout(() => router.push(`/dashboard/${businessId}`), 1500);
+    setTimeout(() => router.push(`/dashboard/${businessId}`), 2000);
   };
 
   const handleDeleteData = () => {
@@ -74,15 +111,22 @@ export default function UploadPage({ params }: { params: Promise<{ businessId: s
     setColumns(null);
   };
 
+  const updateCategory = (txId: string, category: string) => {
+    setNewTransactions((prev) => prev.map((t) => t.id === txId ? { ...t, category } : t));
+  };
+
   const colLetter = (idx: number) => String.fromCharCode(65 + idx);
+  const catOptions = lang === "he" ? CATEGORY_OPTIONS_HE : CATEGORY_OPTIONS_EN;
 
   if (success) {
     return (
       <AppShell>
-        <div className="flex flex-col items-center justify-center h-full p-8">
+        <div className="flex flex-col items-center justify-center h-full p-8 text-center">
           <CheckCircle className="w-16 h-16 text-green-500 mb-4" />
           <h2 className="text-2xl font-bold text-gray-800">{tr.importSuccess}</h2>
-          <p className="text-gray-400 mt-2">{lang === "he" ? "מעביר אותך ללוח הבקרה..." : "Redirecting to dashboard..."}</p>
+          <p className="text-4xl font-bold text-blue-600 my-3">{newTransactions.length}</p>
+          <p className="text-gray-500 mb-2">{tr.importedSuccess}</p>
+          <p className="text-gray-400 mt-4 text-sm">{tr.redirectingToDashboard}</p>
         </div>
       </AppShell>
     );
@@ -92,7 +136,23 @@ export default function UploadPage({ params }: { params: Promise<{ businessId: s
     <AppShell>
       <div className="p-8 max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">{tr.uploadFile}</h1>
-        <p className="text-gray-500 mb-8">{biz?.name}</p>
+        <p className="text-gray-500 mb-3">{biz?.name}</p>
+
+        {/* Bank export guide */}
+        <button
+          onClick={() => setGuideOpen(!guideOpen)}
+          className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 mb-6 font-medium"
+        >
+          {tr.howToExportGuide}
+          <ChevronDown className={`w-4 h-4 transition-transform ${guideOpen ? "rotate-180" : ""}`} />
+        </button>
+        {guideOpen && (
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 space-y-1.5">
+            {[tr.bankHapoalim, tr.bankLeumi, tr.bankDiscount, tr.googleSheets].map((line, i) => (
+              <p key={i} className="text-sm text-blue-700">• {line}</p>
+            ))}
+          </div>
+        )}
 
         {/* Existing data summary */}
         {existingTxs.length > 0 && !file && (
@@ -156,10 +216,19 @@ export default function UploadPage({ params }: { params: Promise<{ businessId: s
               onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
             />
           </div>
-        ) : parsing ? (
+        ) : parsing || categorizing ? (
           <div className="text-center py-16">
             <div className="animate-spin w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4" />
-            <p className="text-gray-500">{lang === "he" ? "מנתח את הקובץ..." : "Parsing file..."}</p>
+            <p className="text-gray-500">
+              {categorizing ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Sparkles className="w-4 h-4 text-blue-500" />
+                  {tr.categorizingTransactions}
+                </span>
+              ) : (
+                lang === "he" ? "מנתח את הקובץ..." : "Parsing file..."
+              )}
+            </p>
           </div>
         ) : columns ? (
           <div className="space-y-6">
@@ -193,7 +262,15 @@ export default function UploadPage({ params }: { params: Promise<{ businessId: s
             </div>
 
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-              <h3 className="font-semibold text-gray-800 mb-4">{lang === "he" ? "תצוגה מקדימה" : "Preview"}</h3>
+              <div className="flex items-center gap-2 mb-4">
+                <h3 className="font-semibold text-gray-800">{lang === "he" ? "תצוגה מקדימה" : "Preview"}</h3>
+                {newTransactions.some((t) => t.category) && (
+                  <span className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                    <Sparkles className="w-3 h-3" />
+                    {lang === "he" ? "קטגוריות הוקצו ע\"י AI" : "AI-assigned categories"}
+                  </span>
+                )}
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -201,18 +278,34 @@ export default function UploadPage({ params }: { params: Promise<{ businessId: s
                       <th className="text-start pb-2 text-gray-500 font-medium">{lang === "he" ? "תאריך" : "Date"}</th>
                       <th className="text-start pb-2 text-gray-500 font-medium">{lang === "he" ? "תיאור" : "Description"}</th>
                       <th className="text-end pb-2 text-gray-500 font-medium">{lang === "he" ? "סכום" : "Amount"}</th>
+                      <th className="text-start pb-2 text-gray-500 font-medium ps-2">{tr.categoryColumn}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {columns.preview.map((tx) => (
-                      <tr key={tx.id} className="border-b border-gray-50">
-                        <td className="py-2 text-gray-600">{tx.date}</td>
-                        <td className="py-2 text-gray-800 max-w-xs truncate">{tx.description}</td>
-                        <td className={`py-2 text-end font-medium ${tx.amount >= 0 ? "text-green-600" : "text-red-600"}`}>
-                          {formatCurrency(tx.amount)}
-                        </td>
-                      </tr>
-                    ))}
+                    {columns.preview.map((tx) => {
+                      const fullTx = newTransactions.find((t) => t.id === tx.id) ?? tx;
+                      return (
+                        <tr key={tx.id} className="border-b border-gray-50">
+                          <td className="py-2 text-gray-600">{tx.date}</td>
+                          <td className="py-2 text-gray-800 max-w-xs truncate">{tx.description}</td>
+                          <td className={`py-2 text-end font-medium ${tx.amount >= 0 ? "text-green-600" : "text-red-600"}`}>
+                            {formatCurrency(tx.amount)}
+                          </td>
+                          <td className="py-2 ps-2">
+                            {tx.amount < 0 ? (
+                              <select
+                                value={fullTx.category ?? ""}
+                                onChange={(e) => updateCategory(tx.id, e.target.value)}
+                                className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-700 focus:outline-none focus:border-blue-400"
+                              >
+                                <option value="">—</option>
+                                {catOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

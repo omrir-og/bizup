@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   Globe,
   TrendingUp,
+  LineChart,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -43,6 +44,11 @@ export default function Sidebar() {
       icon: Lightbulb,
       label: tr.insights,
       href: selectedBusinessId ? `/insights/${selectedBusinessId}` : "/insights",
+    },
+    {
+      icon: LineChart,
+      label: tr.forecast,
+      href: selectedBusinessId ? `/dashboard/${selectedBusinessId}#forecast` : "/dashboard",
     },
   ];
 

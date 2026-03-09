@@ -36,3 +36,19 @@ export interface ParsedColumn {
   headers: string[];
   preview: Transaction[];
 }
+
+export interface SupplierSummary {
+  name: string;
+  totalPaid: number;
+  transactionCount: number;
+  avgAmount: number;
+  lastSeen: string; // YYYY-MM-DD
+  isRecurring: boolean;
+  months: string[]; // YYYY-MM list
+}
+
+export interface CashFlowPoint {
+  month: string;
+  balance: number;
+  isProjected: boolean;
+}

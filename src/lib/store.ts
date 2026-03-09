@@ -50,7 +50,31 @@ export function saveTransactions(transactions: Transaction[]): void {
   localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify([...existing, ...transactions]));
 }
 
+export function updateTransactions(updated: Transaction[]): void {
+  if (typeof window === "undefined") return;
+  const all = getTransactions();
+  const updatedIds = new Set(updated.map((t) => t.id));
+  const merged = all.map((t) => (updatedIds.has(t.id) ? updated.find((u) => u.id === t.id)! : t));
+  localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(merged));
+}
+
 export function clearBusinessTransactions(businessId: string): void {
   const transactions = getTransactions().filter((t) => t.businessId !== businessId);
   localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
+}
+
+export function getBalance(businessId: string): number {
+  if (typeof window === "undefined") return 0;
+  const raw = localStorage.getItem(`bizup_balance_${businessId}`);
+  return raw ? parseFloat(raw) : 0;
+}
+
+export function setBalance(businessId: string, amount: number): void {
+  localStorage.setItem(`bizup_balance_${businessId}`, String(amount));
+  localStorage.setItem(`bizup_balance_updated_${businessId}`, new Date().toISOString());
+}
+
+export function getBalanceUpdatedAt(businessId: string): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(`bizup_balance_updated_${businessId}`);
 }
