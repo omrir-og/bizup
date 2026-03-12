@@ -6,29 +6,12 @@ import {
 } from "recharts";
 import { Language, TimeRange, Transaction } from "@/types";
 import { t } from "@/lib/translations";
+import { truncate, filterByTimeRange } from "./tabUtils";
 
 interface ClientsTabProps {
   transactions: Transaction[];
   timeRange: TimeRange;
   lang: Language;
-}
-
-const truncate = (s: string, max: number) =>
-  s.length > max ? s.slice(0, max) + "…" : s;
-
-function filterByTimeRange(txs: Transaction[], range: TimeRange): Transaction[] {
-  if (range === "all") return txs;
-  const now = new Date();
-  const [y, mo] = [now.getFullYear(), now.getMonth()];
-  let boundary: Date;
-  if (range === "month") boundary = new Date(y, mo, 1);
-  else if (range === "3months") { const d = new Date(now); d.setDate(d.getDate() - 90); boundary = d; }
-  else if (range === "6months") { const d = new Date(now); d.setDate(d.getDate() - 180); boundary = d; }
-  else boundary = new Date(y, 0, 1);
-  return txs.filter((tx) => {
-    const [ty, tm, td] = tx.date.split("-").map(Number);
-    return new Date(ty, tm - 1, td) >= boundary;
-  });
 }
 
 interface ClientGroup {
@@ -137,7 +120,7 @@ export default function ClientsTab({ transactions, timeRange, lang }: ClientsTab
                     {tr.clients}
                   </th>
                   <th className="text-start px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                    {lang === "he" ? "קטגוריה" : "Category"}
+                    {tr.categoryColumn}
                   </th>
                   <th className="text-end px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">
                     {tr.totalReceived}

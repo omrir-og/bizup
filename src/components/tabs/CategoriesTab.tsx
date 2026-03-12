@@ -6,6 +6,7 @@ import {
 } from "recharts";
 import { Language, TimeRange, Transaction } from "@/types";
 import { t } from "@/lib/translations";
+import { truncate, filterByTimeRange } from "./tabUtils";
 
 interface CategoriesTabProps {
   transactions: Transaction[];
@@ -60,24 +61,6 @@ function getProfitTypeBadgeClass(categoryName: string): string {
   if (type === "operating") return "bg-blue-100 text-blue-700";
   if (type === "net") return "bg-purple-100 text-purple-700";
   return "bg-gray-100 text-gray-500";
-}
-
-const truncate = (s: string, max: number) =>
-  s.length > max ? s.slice(0, max) + "…" : s;
-
-function filterByTimeRange(txs: Transaction[], range: TimeRange): Transaction[] {
-  if (range === "all") return txs;
-  const now = new Date();
-  const [y, mo] = [now.getFullYear(), now.getMonth()];
-  let boundary: Date;
-  if (range === "month") boundary = new Date(y, mo, 1);
-  else if (range === "3months") { const d = new Date(now); d.setDate(d.getDate() - 90); boundary = d; }
-  else if (range === "6months") { const d = new Date(now); d.setDate(d.getDate() - 180); boundary = d; }
-  else boundary = new Date(y, 0, 1);
-  return txs.filter((tx) => {
-    const [ty, tm, td] = tx.date.split("-").map(Number);
-    return new Date(ty, tm - 1, td) >= boundary;
-  });
 }
 
 interface CategoryGroup {

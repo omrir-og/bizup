@@ -1,15 +1,13 @@
 "use client";
 
 import { use, useEffect, useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { useApp } from "@/contexts/AppContext";
 import { t } from "@/lib/translations";
 import { getTransactions, deleteTransaction, updateTransactions } from "@/lib/store";
 import AppShell from "@/components/AppShell";
 import { formatCurrency } from "@/lib/utils";
 import { Trash2, Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, AlertTriangle, EyeOff, Eye } from "lucide-react";
-import { Transaction } from "@/types";
-import { TimeRange } from "@/types";
+import { Transaction, TimeRange } from "@/types";
 import TimeFilter from "@/components/tabs/TimeFilter";
 import CategoriesTab from "@/components/tabs/CategoriesTab";
 import SuppliersTab from "@/components/tabs/SuppliersTab";
@@ -46,7 +44,6 @@ export default function TransactionsPage({ params }: { params: Promise<{ busines
   const { businessId } = use(params);
   const { lang, setSelectedBusinessId, businesses } = useApp();
   const tr = t[lang];
-  const router = useRouter();
 
   useEffect(() => { setSelectedBusinessId(businessId); }, [businessId, setSelectedBusinessId]);
 
@@ -149,16 +146,18 @@ export default function TransactionsPage({ params }: { params: Promise<{ busines
 
         {/* Search + filter */}
         <div className="flex gap-3 mb-4">
-          <div className="relative flex-1">
-            <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder={tr.searchTransactions}
-              value={query}
-              onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-              className="w-full ps-9 pe-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 text-sm"
-            />
-          </div>
+          {!isAggregatedTab && (
+            <div className="relative flex-1">
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder={tr.searchTransactions}
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setPage(1); }}
+                className="w-full ps-9 pe-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 text-sm"
+              />
+            </div>
+          )}
           <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
             {(["all", "income", "expense", "excluded", "categories", "suppliers", "clients"] as const).map((f) => (
               <button
