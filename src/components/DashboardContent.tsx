@@ -10,12 +10,14 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine
 } from "recharts";
-import { TrendingUp, TrendingDown, Upload, Lightbulb, Target, DollarSign, ChevronDown } from "lucide-react";
+import { TrendingUp, TrendingDown, Upload, Lightbulb, Target, DollarSign, ChevronDown, Pencil } from "lucide-react";
 import StoryCard from "./StoryCard";
 import CategoryBreakdown from "./CategoryBreakdown";
 import BalanceInput from "./BalanceInput";
 import ForecastChart from "./ForecastChart";
 import OverdraftAlert from "./OverdraftAlert";
+import EditBusinessModal from "./EditBusinessModal";
+import ErrorBoundary from "./ErrorBoundary";
 import { getBalance } from "@/lib/store";
 
 interface Props {
@@ -66,12 +68,10 @@ function EmptyState({ businessId, lang }: { businessId: string | null; lang: str
     <div className="flex flex-col items-center justify-center h-full p-8 text-center max-w-lg mx-auto">
       <div className="text-6xl mb-4">📊</div>
       <h2 className="text-2xl font-bold text-gray-800 mb-2">
-        {lang === "he" ? "ברוך הבא ל-BizUp" : "Welcome to BizUp"}
+        {tr.welcomeToBizUp}
       </h2>
       <p className="text-gray-500 mb-8">
-        {lang === "he"
-          ? "העלה את קובץ הבנק שלך ותקבל תמונה מלאה של העסק תוך שניות"
-          : "Upload your bank file and get a complete picture of your business in seconds"}
+        {tr.welcomeSubtitle}
       </p>
 
       {/* Steps */}
@@ -112,20 +112,25 @@ function EmptyState({ businessId, lang }: { businessId: string | null; lang: str
 }
 
 export default function DashboardContent({ transactions, businessName, businessId, business }: Props) {
-  const { lang } = useApp();
+  const { lang, refreshData } = useApp();
   const tr = t[lang];
   const router = useRouter();
   const forecastRef = useRef<HTMLDivElement>(null);
 
   const [currentBalance, setCurrentBalance] = useState(0);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [currentBusiness, setCurrentBusiness] = useState(business ?? null);
 
   useEffect(() => {
     if (businessId) setCurrentBalance(getBalance(businessId));
   }, [businessId]);
 
-  const stats = groupByMonth(transactions);
-  const totalIncome = transactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const totalExpenses = transactions.filter((t) => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+  const activeTxs = transactions.filter((t) => !t.isExcluded);
+  const excludedCount = transactions.length - activeTxs.length;
+
+  const stats = groupByMonth(activeTxs);
+  const totalIncome = activeTxs.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const totalExpenses = activeTxs.filter((t) => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
   const netProfit = totalIncome - totalExpenses;
   const profitMargin = totalIncome > 0 ? (netProfit / totalIncome) * 100 : 0;
 
@@ -141,16 +146,15 @@ export default function DashboardContent({ transactions, businessName, businessI
   }));
 
   // Budget vs target
-  const targetProfit = business?.targetMonthlyProfit ?? 0;
-  const fixedCosts = business?.fixedMonthlyCosts ?? 0;
+  const targetProfit = currentBusiness?.targetMonthlyProfit ?? 0;
+  const fixedCosts = currentBusiness?.fixedMonthlyCosts ?? 0;
   const lastMonthProfit = lastMonthStats?.netProfit ?? 0;
   const lastMonthExpenses = lastMonthStats?.expenses ?? 0;
-  const vsTargetGap = targetProfit > 0 ? lastMonthProfit - targetProfit : null;
   const vsBudgetGap = fixedCosts > 0 ? fixedCosts - lastMonthExpenses : null;
 
   // Forecast
   const forecast = currentBalance > 0
-    ? projectCashFlow(transactions, currentBalance, 3)
+    ? projectCashFlow(transactions, currentBalance, 3, fixedCosts)
     : [];
 
   // Quick insights
@@ -179,7 +183,7 @@ export default function DashboardContent({ transactions, businessName, businessI
       }
     }
   }
-  if (profitMargin < 10 && transactions.length > 0) {
+  if (profitMargin < 10 && activeTxs.length > 0) {
     insights.push({
       text: lang === "he"
         ? `מרווח הרווח (${profitMargin.toFixed(1)}%) נמוך — שקול הפחתת עלויות`
@@ -203,12 +207,30 @@ export default function DashboardContent({ transactions, businessName, businessI
       )}
 
       {/* Story card */}
-      <StoryCard transactions={transactions} businessId={businessId ?? ""} />
+      <ErrorBoundary>
+        <StoryCard transactions={transactions} businessId={businessId ?? ""} />
+      </ErrorBoundary>
 
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">{businessName || tr.dashboard}</h1>
+          <div className="flex items-center gap-3 mb-1">
+            {currentBusiness?.logo && (
+              <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 border border-gray-100">
+                <img src={currentBusiness.logo} alt={currentBusiness.name} className="w-full h-full object-cover" />
+              </div>
+            )}
+            <h1 className="text-3xl font-bold text-gray-900">{currentBusiness?.name || businessName || tr.dashboard}</h1>
+            {currentBusiness && (
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                title={tr.editBusiness}
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            )}
+          </div>
           <p className="text-gray-500 mt-1">{tr.tagline}</p>
         </div>
         <div className="flex gap-3">
@@ -247,26 +269,52 @@ export default function DashboardContent({ transactions, businessName, businessI
         />
       </div>
 
+      {excludedCount > 0 && (
+        <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 mb-6">
+          <span>🔕</span>
+          <span>
+            {((tr as Record<string, string>).excludedBadge).replace("{n}", String(excludedCount))}
+          </span>
+          <span className="text-gray-400">·</span>
+          <span>{lang === "he" ? "הלוואות בעלים / דיבידנדים" : "owner loans / dividends"}</span>
+        </div>
+      )}
+
       {/* KPI Grid — averages + budget */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <KPICard label={tr.avg3} value={formatCurrency(avg3)} positive={avg3 >= 0} />
         <KPICard label={tr.avg6} value={formatCurrency(avg6)} positive={avg6 >= 0} />
-        {vsTargetGap !== null ? (
-          <KPICard
-            label={tr.vsTarget}
-            value={formatCurrency(Math.abs(vsTargetGap))}
-            sub={vsTargetGap >= 0 ? tr.onTarget : tr.overBudget}
-            positive={vsTargetGap >= 0}
-          />
-        ) : (
-          <div
-            className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition-colors"
-            onClick={() => router.push("/")}
-          >
-            <Target className="w-5 h-5 text-gray-400 mb-1" />
-            <p className="text-xs text-gray-400 text-center">{tr.setTarget}</p>
-          </div>
-        )}
+        {/* Goal progress */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+          {targetProfit > 0 ? (() => {
+            const progress = Math.min((lastMonthProfit / targetProfit) * 100, 100);
+            const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+            const daysLeft = daysInMonth - new Date().getDate();
+            return (
+              <>
+                <p className="text-sm text-gray-500 mb-2">{tr.goalProgress}</p>
+                <p className={`text-2xl font-bold mb-1 ${lastMonthProfit >= targetProfit ? "text-green-600" : lastMonthProfit >= targetProfit * 0.5 ? "text-amber-600" : "text-red-500"}`}>
+                  {formatCurrency(lastMonthProfit)}
+                </p>
+                <p className="text-xs text-gray-400 mb-3">
+                  {tr.goalProgressOf} {formatCurrency(targetProfit)} · {daysLeft} {tr.goalDaysLeft}
+                </p>
+                <div className="w-full bg-gray-100 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${progress >= 80 ? "bg-green-500" : progress >= 50 ? "bg-amber-400" : "bg-red-500"}`}
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <p className="text-xs text-gray-400 mt-1 text-end">{Math.round(progress)}%</p>
+              </>
+            );
+          })() : (
+            <div className="flex flex-col items-center justify-center h-full min-h-[80px] cursor-pointer" onClick={() => setShowEditModal(true)}>
+              <Target className="w-5 h-5 text-gray-400 mb-1" />
+              <p className="text-xs text-gray-400 text-center">{tr.goalSetTarget}</p>
+            </div>
+          )}
+        </div>
         {vsBudgetGap !== null ? (
           <KPICard
             label={tr.fixedCostsBurn}
@@ -319,7 +367,9 @@ export default function DashboardContent({ transactions, businessName, businessI
       {/* Category breakdown */}
       {transactions.some((t) => t.category) && (
         <div className="mb-8">
-          <CategoryBreakdown transactions={transactions} />
+          <ErrorBoundary>
+            <CategoryBreakdown transactions={transactions} />
+          </ErrorBoundary>
         </div>
       )}
 
@@ -356,8 +406,24 @@ export default function DashboardContent({ transactions, businessName, businessI
           businessId={businessId ?? ""}
           onChange={(bal) => setCurrentBalance(bal)}
         />
-        {forecast.length > 0 && <ForecastChart data={forecast} />}
+        {forecast.length > 0 && (
+          <ErrorBoundary>
+            <ForecastChart data={forecast} />
+          </ErrorBoundary>
+        )}
       </div>
+
+      {showEditModal && currentBusiness && (
+        <EditBusinessModal
+          business={currentBusiness}
+          onClose={() => setShowEditModal(false)}
+          onSaved={(updated) => {
+            setCurrentBusiness(updated);
+            setShowEditModal(false);
+            refreshData();
+          }}
+        />
+      )}
     </div>
   );
 }

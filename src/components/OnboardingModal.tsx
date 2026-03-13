@@ -3,7 +3,16 @@
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { t } from "@/lib/translations";
-import { X, Upload } from "lucide-react";
+import {
+  X,
+  Upload,
+  Briefcase,
+  RefreshCw,
+  ShoppingCart,
+  Layers,
+  Clock,
+  BarChart2,
+} from "lucide-react";
 
 const INDUSTRIES_HE = [
   { value: "services", label: "שירותים מקצועיים" },
@@ -37,6 +46,15 @@ const INDUSTRIES_EN = [
   { value: "other", label: "Other" },
 ];
 
+const REVENUE_MODELS = [
+  { value: "one_time_projects", icon: Briefcase },
+  { value: "monthly_retainer", icon: RefreshCw },
+  { value: "product_sales", icon: ShoppingCart },
+  { value: "subscriptions", icon: Layers },
+  { value: "hourly_billing", icon: Clock },
+  { value: "mixed", icon: BarChart2 },
+] as const;
+
 interface Props {
   onClose: (businessId?: string) => void;
 }
@@ -47,16 +65,27 @@ export default function OnboardingModal({ onClose }: Props) {
   const industries = lang === "he" ? INDUSTRIES_HE : INDUSTRIES_EN;
 
   const [step, setStep] = useState(0);
+  const [ownerNames, setOwnerNames] = useState<string[]>([]);
+  const [ownerInput, setOwnerInput] = useState("");
   const [form, setForm] = useState({
     name: "",
     industry: "services",
     revenueModel: "",
     employees: 1,
-    targetMonthlyProfit: 0,
     logo: "",
   });
 
   const update = (k: string, v: string | number) => setForm((f) => ({ ...f, [k]: v }));
+
+  const addOwner = () => {
+    const trimmed = ownerInput.trim();
+    if (trimmed && !ownerNames.includes(trimmed)) {
+      setOwnerNames((prev) => [...prev, trimmed]);
+    }
+    setOwnerInput("");
+  };
+
+  const removeOwner = (name: string) => setOwnerNames((prev) => prev.filter((n) => n !== name));
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -66,7 +95,14 @@ export default function OnboardingModal({ onClose }: Props) {
     reader.readAsDataURL(file);
   };
 
+  // Revenue model label lookup
+  const revenueModelLabel = (value: string): string => {
+    const key = `revenueModel_${value}` as keyof typeof tr;
+    return (tr[key] as string) ?? value;
+  };
+
   const steps = [
+    // Step 0: Business Details — unchanged
     {
       title: lang === "he" ? "פרטי העסק" : "Business Details",
       content: (
@@ -99,6 +135,44 @@ export default function OnboardingModal({ onClose }: Props) {
             value={form.name}
             onChange={(e) => update("name", e.target.value)}
           />
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">{tr.ownerName}</label>
+            {ownerNames.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {ownerNames.map((name) => (
+                  <span
+                    key={name}
+                    className="flex items-center gap-1 bg-blue-50 text-blue-700 text-sm px-3 py-1 rounded-full border border-blue-200"
+                  >
+                    {name}
+                    <button
+                      type="button"
+                      onClick={() => removeOwner(name)}
+                      className="text-blue-400 hover:text-blue-700 leading-none"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                className="flex-1 border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                placeholder="ישראל ישראלי"
+                value={ownerInput}
+                onChange={(e) => setOwnerInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addOwner(); } }}
+              />
+              <button
+                type="button"
+                onClick={addOwner}
+                className="w-10 h-10 rounded-xl bg-blue-600 text-white text-xl font-light hover:bg-blue-700 flex items-center justify-center flex-shrink-0"
+              >
+                +
+              </button>
+            </div>
+          </div>
           <select
             className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             value={form.industry}
@@ -111,6 +185,38 @@ export default function OnboardingModal({ onClose }: Props) {
         </div>
       ),
     },
+
+    // Step 1 (NEW): Revenue Model — 2×3 tile grid
+    {
+      title: tr.revenueModelStep,
+      content: (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">{tr.revenueModelDesc}</p>
+          <div className="grid grid-cols-3 gap-3">
+            {REVENUE_MODELS.map(({ value, icon: Icon }) => {
+              const selected = form.revenueModel === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => update("revenueModel", value)}
+                  className={`rounded-xl p-3 text-center cursor-pointer transition-all flex flex-col items-center gap-1.5 ${
+                    selected
+                      ? "bg-blue-50 border-2 border-blue-500 text-blue-700"
+                      : "bg-white border-2 border-gray-200 text-gray-700 hover:border-blue-300"
+                  }`}
+                >
+                  <Icon className="w-6 h-6" />
+                  <span className="text-xs font-medium leading-tight">{revenueModelLabel(value)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ),
+    },
+
+    // Step 2 (shifted): Business Scale
     {
       title: lang === "he" ? "גודל העסק" : "Business Scale",
       content: (
@@ -128,40 +234,27 @@ export default function OnboardingModal({ onClose }: Props) {
         </div>
       ),
     },
-    {
-      title: lang === "he" ? "יעדים" : "Goals",
-      content: (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">{tr.targetProfit} (₪)</label>
-            <input
-              type="number"
-              className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={form.targetMonthlyProfit}
-              onChange={(e) => update("targetMonthlyProfit", +e.target.value)}
-            />
-          </div>
-        </div>
-      ),
-    },
+
   ];
 
   const handleNext = () => {
     if (step < steps.length - 1) {
       setStep((s) => s + 1);
     } else {
+      // Step 3 — final: validate and submit
       if (!form.name.trim()) {
         alert(lang === "he" ? "נא להזין שם עסק" : "Please enter a business name");
         return;
       }
       const biz = addBusiness({
         name: form.name,
+        ownerNames,
         logo: form.logo,
         industry: form.industry,
         revenueModel: form.revenueModel,
         employees: form.employees,
         fixedMonthlyCosts: 0,
-        targetMonthlyProfit: form.targetMonthlyProfit,
+        targetMonthlyProfit: 0,
       });
       onClose(biz.id);
     }
@@ -178,6 +271,7 @@ export default function OnboardingModal({ onClose }: Props) {
         </button>
 
         <div className="mb-6">
+          {/* Progress bar */}
           <div className="flex gap-2 mb-4">
             {steps.map((_, i) => (
               <div

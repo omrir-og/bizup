@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { Business, Language, Transaction } from "@/types";
 import { getBusinesses, getTransactions, saveBusiness, deleteBusiness, saveTransactions } from "@/lib/store";
+import { parseDate } from "@/lib/utils";
 
 interface AppContextType {
   lang: Language;
@@ -38,6 +39,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const stored = localStorage.getItem("bizup_lang") as Language | null;
     if (stored) setLangState(stored);
+
+    // One-time migration: normalize all stored dates to YYYY-MM-DD
+    const MIGRATION_KEY = "bizup_date_migration_v2";
+    if (!localStorage.getItem(MIGRATION_KEY)) {
+      try {
+        const TRANSACTIONS_KEY = "bizup_transactions";
+        const raw = localStorage.getItem(TRANSACTIONS_KEY);
+        if (raw) {
+          const txs = JSON.parse(raw);
+          const fixed = txs.map((t: { date: string }) => ({ ...t, date: parseDate(t.date) }));
+          localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(fixed));
+        }
+        localStorage.setItem(MIGRATION_KEY, "1");
+      } catch { /* ignore */ }
+    }
+
     refreshData();
   }, []);
 

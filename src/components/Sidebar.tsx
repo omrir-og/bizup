@@ -15,6 +15,7 @@ import {
   Globe,
   TrendingUp,
   LineChart,
+  Receipt,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -41,6 +42,11 @@ export default function Sidebar() {
       href: selectedBusinessId ? `/upload/${selectedBusinessId}` : "/upload",
     },
     {
+      icon: Receipt,
+      label: tr.transactionsPage,
+      href: selectedBusinessId ? `/transactions/${selectedBusinessId}` : "/transactions",
+    },
+    {
       icon: Lightbulb,
       label: tr.insights,
       href: selectedBusinessId ? `/insights/${selectedBusinessId}` : "/insights",
@@ -48,7 +54,7 @@ export default function Sidebar() {
     {
       icon: LineChart,
       label: tr.forecast,
-      href: selectedBusinessId ? `/dashboard/${selectedBusinessId}#forecast` : "/dashboard",
+      href: selectedBusinessId ? `/insights/${selectedBusinessId}` : "/insights",
     },
   ];
 

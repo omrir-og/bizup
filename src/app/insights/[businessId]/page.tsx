@@ -4,10 +4,12 @@ import { use, useEffect, useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { t } from "@/lib/translations";
 import { getTransactions } from "@/lib/store";
-import { groupByMonth, formatCurrency, extractSuppliers } from "@/lib/utils";
+import { groupByMonth, formatCurrency } from "@/lib/utils";
 import AppShell from "@/components/AppShell";
-import SupplierTable from "@/components/SupplierTable";
 import CategoryBreakdown from "@/components/CategoryBreakdown";
+import PartnerIntelligence from "@/components/PartnerIntelligence";
+import CategoryBudgets from "@/components/CategoryBudgets";
+import RecurringPanel from "@/components/RecurringPanel";
 import { Lightbulb, TrendingDown, TrendingUp, AlertTriangle, CheckCircle, Sparkles, RefreshCw, DollarSign, Activity, Star } from "lucide-react";
 
 interface AIAnalysis {
@@ -28,6 +30,7 @@ export default function InsightsPage({ params }: { params: Promise<{ businessId:
 
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(false);
 
   useEffect(() => {
     setSelectedBusinessId(businessId);
@@ -44,7 +47,6 @@ export default function InsightsPage({ params }: { params: Promise<{ businessId:
   const biz = businesses.find((b) => b.id === businessId);
   const transactions = getTransactions(businessId);
   const stats = groupByMonth(transactions);
-  const suppliers = extractSuppliers(transactions);
 
   const totalIncome = transactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const totalExpenses = transactions.filter((t) => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
@@ -56,13 +58,9 @@ export default function InsightsPage({ params }: { params: Promise<{ businessId:
     const monthlyBreakdown = stats.slice(-6).map((s) =>
       `${s.month}: income ₪${s.income.toFixed(0)}, expenses ₪${s.expenses.toFixed(0)}, profit ₪${s.netProfit.toFixed(0)}`
     ).join("\n");
-    const topSuppliers = suppliers.slice(0, 10).map((s) =>
-      `${s.name}: ₪${s.totalPaid.toFixed(0)} (${s.transactionCount}x, recurring: ${s.isRecurring})`
-    ).join("\n");
     return `Business: ${biz?.name}, Industry: ${biz?.industry}
 Total income: ₪${totalIncome.toFixed(0)}, Total expenses: ₪${totalExpenses.toFixed(0)}, Profit margin: ${profitMargin.toFixed(1)}%
-Monthly data (last 6 months):\n${monthlyBreakdown}
-Top suppliers:\n${topSuppliers}`;
+Monthly data (last 6 months):\n${monthlyBreakdown}`;
   };
 
   const handleGenerateAI = async (forceRefresh = false) => {
@@ -82,7 +80,9 @@ Top suppliers:\n${topSuppliers}`;
           timestamp: Date.now(),
         }));
       }
-    } catch { /* ignore */ } finally {
+    } catch {
+      setAiError(true);
+    } finally {
       setAiLoading(false);
     }
   };
@@ -212,6 +212,18 @@ Top suppliers:\n${topSuppliers}`;
                 </button>
               </div>
 
+              {aiError && !aiAnalysis && !aiLoading && (
+                <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+                  <span>{tr.aiAnalysisFailed}</span>
+                  <button
+                    onClick={() => { setAiError(false); handleGenerateAI(true); }}
+                    className="ms-4 text-sm font-medium text-red-600 hover:text-red-800 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-100"
+                  >
+                    {tr.retryAnalysis}
+                  </button>
+                </div>
+              )}
+
               {aiAnalysis && (
                 <div className="grid grid-cols-1 gap-4">
                   {/* Health score */}
@@ -289,9 +301,21 @@ Top suppliers:\n${topSuppliers}`;
               </div>
             )}
 
-            {/* Supplier intelligence */}
+            {/* Category budgets */}
+            {transactions.some((t) => t.category) && (
+              <div className="mb-8">
+                <CategoryBudgets transactions={transactions} businessId={businessId} />
+              </div>
+            )}
+
+            {/* Partner intelligence (clients + suppliers) */}
             <div id="suppliers" className="mb-8">
-              <SupplierTable suppliers={suppliers} />
+              <PartnerIntelligence transactions={transactions} businessId={businessId} />
+            </div>
+
+            {/* Recurring items + next month prediction */}
+            <div className="mb-8">
+              <RecurringPanel transactions={transactions} businessId={businessId} />
             </div>
           </>
         )}

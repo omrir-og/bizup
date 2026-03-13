@@ -9,6 +9,7 @@ import { groupByMonth, formatCurrency } from "@/lib/utils";
 import AppShell from "@/components/AppShell";
 import OnboardingModal from "@/components/OnboardingModal";
 import ShareBusinessModal from "@/components/ShareBusinessModal";
+import CategoryPickerModal from "@/components/CategoryPickerModal";
 import SparklineChart from "@/components/SparklineChart";
 import { Business } from "@/types";
 import { Plus, TrendingUp, TrendingDown, Trash2, BarChart3, Share2 } from "lucide-react";
@@ -19,12 +20,18 @@ export default function HomePage() {
   const router = useRouter();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [sharingBusiness, setSharingBusiness] = useState<Business | null>(null);
+  const [sortBy, setSortBy] = useState<"balance" | "name" | "transactions">("balance");
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+  const [categoryPickerBizId, setCategoryPickerBizId] = useState<string | null>(null);
+  const [categoryPickerIndustry, setCategoryPickerIndustry] = useState<string>("services");
 
   const handleOnboardingClose = (businessId?: string) => {
     setShowOnboarding(false);
     if (businessId) {
       setSelectedBusinessId(businessId);
-      router.push(`/dashboard/${businessId}`);
+      const biz = businesses.find(b => b.id === businessId);
+      setCategoryPickerBizId(businessId);
+      setCategoryPickerIndustry(biz?.industry ?? "services");
     }
   };
 
@@ -36,6 +43,16 @@ export default function HomePage() {
     const totalBalance = txs.reduce((s, tx) => s + tx.amount, 0);
     return { last, sparkData, totalBalance, txCount: txs.length };
   };
+
+  const sortedBusinesses = [...businesses].sort((a, b) => {
+    const statsA = getBusinessStats(a.id);
+    const statsB = getBusinessStats(b.id);
+    let val = 0;
+    if (sortBy === "balance") val = statsA.totalBalance - statsB.totalBalance;
+    else if (sortBy === "name") val = a.name.localeCompare(b.name);
+    else if (sortBy === "transactions") val = statsA.txCount - statsB.txCount;
+    return sortDir === "desc" ? -val : val;
+  });
 
   const allStats = groupByMonth(transactions);
   const consolidatedBalance = transactions.reduce((s, tx) => s + tx.amount, 0);
@@ -58,6 +75,25 @@ export default function HomePage() {
             {tr.addBusiness}
           </button>
         </div>
+
+        {businesses.length > 1 && (
+          <div className="flex items-center gap-2 mb-4 text-sm">
+            <span className="text-gray-500">{lang === "he" ? "מיון לפי:" : "Sort by:"}</span>
+            {(["balance", "name", "transactions"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => {
+                  if (sortBy === s) setSortDir(d => d === "desc" ? "asc" : "desc");
+                  else { setSortBy(s); setSortDir("desc"); }
+                }}
+                className={`px-3 py-1 rounded-lg border transition-colors ${sortBy === s ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"}`}
+              >
+                {s === "balance" ? (lang === "he" ? "יתרה" : "Balance") : s === "name" ? (lang === "he" ? "שם" : "Name") : (lang === "he" ? "עסקאות" : "Transactions")}
+                {sortBy === s && (sortDir === "desc" ? " ↓" : " ↑")}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {businesses.length > 1 && (
@@ -85,7 +121,7 @@ export default function HomePage() {
             </button>
           )}
 
-          {businesses.map((biz) => {
+          {sortedBusinesses.map((biz) => {
             const { last, sparkData, totalBalance, txCount } = getBusinessStats(biz.id);
             const isPositive = totalBalance >= 0;
             return (
@@ -99,8 +135,12 @@ export default function HomePage() {
                       <h3 className="font-bold text-gray-900 text-lg">{biz.name}</h3>
                       <p className="text-gray-400 text-sm capitalize">{biz.industry}</p>
                     </div>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${isPositive ? "bg-green-500" : "bg-red-500"}`}>
-                      {biz.name[0]?.toUpperCase()}
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold overflow-hidden flex-shrink-0 ${!biz.logo ? (isPositive ? "bg-green-500" : "bg-red-500") : ""}`}>
+                      {biz.logo ? (
+                        <img src={biz.logo} alt={biz.name} className="w-full h-full object-cover" />
+                      ) : (
+                        biz.name[0]?.toUpperCase()
+                      )}
                     </div>
                   </div>
                   <div className="mb-4">
@@ -149,6 +189,17 @@ export default function HomePage() {
 
       {showOnboarding && <OnboardingModal onClose={handleOnboardingClose} />}
       {sharingBusiness && <ShareBusinessModal business={sharingBusiness} onClose={() => setSharingBusiness(null)} />}
+      {categoryPickerBizId && (
+        <CategoryPickerModal
+          businessId={categoryPickerBizId}
+          industry={categoryPickerIndustry}
+          onClose={() => {
+            const bizId = categoryPickerBizId;
+            setCategoryPickerBizId(null);
+            router.push(`/dashboard/${bizId}`);
+          }}
+        />
+      )}
     </AppShell>
   );
 }
