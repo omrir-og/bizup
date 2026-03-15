@@ -7,11 +7,7 @@ import { getTransactions, deleteTransaction, updateTransactions } from "@/lib/st
 import AppShell from "@/components/AppShell";
 import { formatCurrency } from "@/lib/utils";
 import { Trash2, Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, AlertTriangle, EyeOff, Eye } from "lucide-react";
-import { Transaction, TimeRange } from "@/types";
-import TimeFilter from "@/components/tabs/TimeFilter";
-import CategoriesTab from "@/components/tabs/CategoriesTab";
-import SuppliersTab from "@/components/tabs/SuppliersTab";
-import ClientsTab from "@/components/tabs/ClientsTab";
+import { Transaction } from "@/types";
 
 const PAGE_SIZE = 50;
 
@@ -50,8 +46,7 @@ export default function TransactionsPage({ params }: { params: Promise<{ busines
   const biz = businesses.find((b) => b.id === businessId);
 
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "income" | "expense" | "excluded" | "categories" | "suppliers" | "clients">("all");
-  const [timeRange, setTimeRange] = useState<TimeRange>("month");
+  const [filter, setFilter] = useState<"all" | "income" | "expense" | "excluded">("all");
   const [page, setPage] = useState(1);
   const [confirmDelete, setConfirmDelete] = useState<Transaction | null>(null);
   const [sortCol, setSortCol] = useState<"date" | "description" | "category" | "amount">("date");
@@ -59,8 +54,6 @@ export default function TransactionsPage({ params }: { params: Promise<{ busines
   const [txs, setTxs] = useState<Transaction[]>(() =>
     getTransactions(businessId).sort((a, b) => b.date.localeCompare(a.date))
   );
-
-  const isAggregatedTab = filter === "categories" || filter === "suppliers" || filter === "clients";
 
   const filtered = useMemo(() => {
     return txs.filter((t) => {
@@ -127,8 +120,7 @@ export default function TransactionsPage({ params }: { params: Promise<{ busines
         </div>
 
         {/* Summary */}
-        {!isAggregatedTab && (
-          <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-3 gap-4 mb-6">
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center">
               <p className="text-xs text-gray-500 mb-1">{tr.transactions}</p>
               <p className="text-xl font-bold text-gray-800">{filtered.length}</p>
@@ -142,24 +134,21 @@ export default function TransactionsPage({ params }: { params: Promise<{ busines
               <p className="text-xl font-bold text-red-700">{formatCurrency(totalExpenses)}</p>
             </div>
           </div>
-        )}
 
         {/* Search + filter */}
         <div className="flex gap-3 mb-4">
-          {!isAggregatedTab && (
-            <div className="relative flex-1">
-              <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder={tr.searchTransactions}
-                value={query}
-                onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-                className="w-full ps-9 pe-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 text-sm"
-              />
-            </div>
-          )}
+          <div className="relative flex-1">
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder={tr.searchTransactions}
+              value={query}
+              onChange={(e) => { setQuery(e.target.value); setPage(1); }}
+              className="w-full ps-9 pe-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 text-sm"
+            />
+          </div>
           <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-            {(["all", "income", "expense", "excluded", "categories", "suppliers", "clients"] as const).map((f) => (
+            {(["all", "income", "expense", "excluded"] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => { setFilter(f); setPage(1); }}
@@ -170,34 +159,14 @@ export default function TransactionsPage({ params }: { params: Promise<{ busines
                 {f === "all" ? tr.filterAll
                   : f === "income" ? tr.filterIncome
                   : f === "expense" ? tr.filterExpenses
-                  : f === "excluded" ? tr.excludedTransactions
-                  : f === "categories" ? tr.categoriesTab
-                  : f === "suppliers" ? tr.suppliersTab
-                  : tr.clients}
+                  : tr.excludedTransactions}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Time filter — only for aggregated tabs */}
-        {isAggregatedTab && (
-          <TimeFilter value={timeRange} onChange={setTimeRange} lang={lang} />
-        )}
-
-        {/* Aggregated tab views */}
-        {filter === "categories" && (
-          <CategoriesTab transactions={txs} timeRange={timeRange} lang={lang} />
-        )}
-        {filter === "suppliers" && (
-          <SuppliersTab transactions={txs} timeRange={timeRange} lang={lang} />
-        )}
-        {filter === "clients" && (
-          <ClientsTab transactions={txs} timeRange={timeRange} lang={lang} />
-        )}
-
         {/* Table */}
-        {!isAggregatedTab && (
-          <>
+        <>
             {paginated.length === 0 ? (
               <div className="text-center py-16 text-gray-400">{tr.noTransactionsFound}</div>
             ) : (
@@ -306,7 +275,6 @@ export default function TransactionsPage({ params }: { params: Promise<{ busines
               </div>
             )}
           </>
-        )}
       </div>
 
       {/* Delete confirm modal */}

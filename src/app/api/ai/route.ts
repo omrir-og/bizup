@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
-  const { messages, context, lang, voiceMode, categorizeMode, insightsMode, firstLookMode, cleanMode, descriptions, customCategories } = await req.json();
+  const { messages, context, lang, voiceMode, categorizeMode, insightsMode, firstLookMode, cleanMode, pageInsightMode, pageType, descriptions, customCategories } = await req.json();
 
   // ── Categorize mode: batch-label transaction descriptions ──
   if (categorizeMode && descriptions) {
@@ -206,6 +206,58 @@ ${context}`;
       return NextResponse.json({ analysis: result });
     } catch {
       return NextResponse.json({ analysis: null });
+    }
+  }
+
+  // ── Page insight mode: AI summary for Categories/Suppliers/Clients/CashFlow ──
+  if (pageInsightMode && context && pageType) {
+    const pageLabels: Record<string, { he: string; en: string }> = {
+      categories: { he: "קטגוריות", en: "categories" },
+      suppliers: { he: "ספקים", en: "suppliers" },
+      clients: { he: "לקוחות", en: "clients" },
+      cashflow: { he: "תזרים מזומנים", en: "cash flow" },
+    };
+    const label = pageLabels[pageType]?.[lang as "he" | "en"] || pageType;
+
+    const prompt = lang === "he"
+      ? `אתה BizUp AI — אנליסט פיננסי לבעלי עסקים.
+נתח את נתוני ${label} הבאים וספק תגובה כ-JSON בלבד:
+{
+  "summary": "סיכום של 2-3 משפטים על מה שהנתונים מראים",
+  "alerts": [
+    { "type": "anomaly|recommendation|positive", "text": "טקסט התראה קצר" }
+  ]
+}
+מקסימום 3 התראות. ציין מספרים ספציפיים. ללא ז'רגון.
+
+נתונים:
+${context}`
+      : `You are BizUp AI — a financial analyst for business owners.
+Analyze the following ${label} data and respond with JSON only:
+{
+  "summary": "2-3 sentence summary of what the data shows",
+  "alerts": [
+    { "type": "anomaly|recommendation|positive", "text": "short alert text" }
+  ]
+}
+Maximum 3 alerts. Be specific with numbers. No jargon.
+
+Data:
+${context}`;
+
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = response.content[0].type === "text" ? response.content[0].text : "{}";
+    try {
+      const stripped = text.replace(/^```json\n?|```$/gm, "").trim();
+      const jsonMatch = stripped.match(/\{[\s\S]*\}/);
+      const result = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+      return NextResponse.json({ insight: result });
+    } catch {
+      return NextResponse.json({ insight: null });
     }
   }
 

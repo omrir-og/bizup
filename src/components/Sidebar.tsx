@@ -14,8 +14,11 @@ import {
   ChevronLeft,
   Globe,
   TrendingUp,
-  LineChart,
   Receipt,
+  PieChart,
+  Truck,
+  Users,
+  Wallet,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -29,34 +32,24 @@ export default function Sidebar() {
   const ChevronOpen = isRTL ? ChevronLeft : ChevronRight;
   const ChevronClose = isRTL ? ChevronRight : ChevronLeft;
 
-  const navItems = [
+  const id = selectedBusinessId;
+
+  const coreItems = [
     { icon: Building2, label: tr.hub, href: "/" },
-    {
-      icon: LayoutDashboard,
-      label: tr.dashboard,
-      href: selectedBusinessId ? `/dashboard/${selectedBusinessId}` : "/dashboard",
-    },
-    {
-      icon: Upload,
-      label: tr.upload,
-      href: selectedBusinessId ? `/upload/${selectedBusinessId}` : "/upload",
-    },
-    {
-      icon: Receipt,
-      label: tr.transactionsPage,
-      href: selectedBusinessId ? `/transactions/${selectedBusinessId}` : "/transactions",
-    },
-    {
-      icon: Lightbulb,
-      label: tr.insights,
-      href: selectedBusinessId ? `/insights/${selectedBusinessId}` : "/insights",
-    },
-    {
-      icon: LineChart,
-      label: tr.forecast,
-      href: selectedBusinessId ? `/insights/${selectedBusinessId}` : "/insights",
-    },
+    { icon: LayoutDashboard, label: tr.dashboard, href: id ? `/dashboard/${id}` : "/dashboard" },
+    { icon: Upload, label: tr.upload, href: id ? `/upload/${id}` : "/upload" },
+    { icon: Receipt, label: tr.transactionsPage, href: id ? `/transactions/${id}` : "/transactions" },
   ];
+
+  const analysisItems = [
+    { icon: PieChart, label: tr.categoriesPage, href: id ? `/categories/${id}` : "/categories" },
+    { icon: Truck, label: tr.suppliersPage, href: id ? `/suppliers/${id}` : "/suppliers" },
+    { icon: Users, label: tr.clientsPage, href: id ? `/clients/${id}` : "/clients" },
+    { icon: Wallet, label: tr.cashFlowPage, href: id ? `/cashflow/${id}` : "/cashflow" },
+    { icon: Lightbulb, label: tr.insights, href: id ? `/insights/${id}` : "/insights" },
+  ];
+
+  const navItems = [...coreItems, ...analysisItems];
 
   return (
     <div
@@ -76,26 +69,29 @@ export default function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-4 flex flex-col gap-1">
-        {navItems.map(({ icon: Icon, label, href }) => {
+      <nav className="flex-1 py-4 flex flex-col gap-1 overflow-y-auto">
+        {navItems.map(({ icon: Icon, label, href }, idx) => {
           const active = pathname === href || pathname.startsWith(href + "/");
+          const showSeparator = idx === coreItems.length;
           return (
-            <button
-              key={href}
-              onClick={() => {
-                router.push(href);
-                setExpanded(false);
-              }}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 w-full transition-colors rounded-none",
-                active
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-400 hover:bg-gray-800 hover:text-white"
-              )}
-            >
-              <Icon className="w-5 h-5 flex-shrink-0" />
-              {expanded && <span className="text-sm whitespace-nowrap">{label}</span>}
-            </button>
+            <div key={href}>
+              {showSeparator && <div className="border-t border-gray-700 my-1 mx-4" />}
+              <button
+                onClick={() => {
+                  router.push(href);
+                  setExpanded(false);
+                }}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 w-full transition-colors rounded-none",
+                  active
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-400 hover:bg-gray-800 hover:text-white"
+                )}
+              >
+                <Icon className="w-5 h-5 flex-shrink-0" />
+                {expanded && <span className="text-sm whitespace-nowrap">{label}</span>}
+              </button>
+            </div>
           );
         })}
       </nav>
